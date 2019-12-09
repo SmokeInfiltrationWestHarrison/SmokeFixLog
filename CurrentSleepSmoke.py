@@ -12,6 +12,7 @@ import SmokeAndSleep as sas
 
 ## How far into the future we project moving averages
 projectionTime = 24 * 60 * 60  # seconds
+#projectionTime = 0 # seconds
 #projectionTime = 0 * 60 * 60  # seconds
 ## How much past time to include in the sleep moving average
 sleepAvgDuration = 2 * 24 * 60 * 60  # seconds

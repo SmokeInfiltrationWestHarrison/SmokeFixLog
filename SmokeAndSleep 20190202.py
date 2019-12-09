@@ -6,11 +6,9 @@ import csv
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as md
-from matplotlib.collections import LineCollection
 #import numpy as np
 #from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 from matplotlib.ticker import MultipleLocator
-import numpy as np
 
 #import WorkbookLoaders as wl
 
@@ -39,21 +37,6 @@ dayRange = 7  # days
 maxDaysForTimeLables = 10000 # for writing sleepless intervals to file
 # Directory to put saved plots in
 plotDir = "plots"
-# delimits sections of notable date ranges in the written csv files
-sleeplessIntervalDelim = "Sleepless Interval"
-# subdir pathname for the notable dates csv
-notableDatesPathname = "Notable Dates"
-# filename for notable date intervals csv (time will be added as well)
-notableDatesHeader = "Notable Dates"
-# filename for low sleep intervals derived from the moving average sleep
-lowSleepHeader = "Low Sleep"
-# Have to turn this on to write "notable dates" or low sleep intervals to a file
-writeNotableDates = True
-# average sleep limit considered "low" in hours
-lowSleepLimit = 7
-# colors to use on the moving average line for sleep below or above the low sleep limit
-lowSleepColor = "r--"
-normalSleepColor = "k--"
 
 # Yellow for smoke that interferes with sleep
 smokeSleepBorderColor = "y"
@@ -127,8 +110,6 @@ def calculateSleepData(sleepTimes, startTime, currTime, endTime, projectionTime,
   
   #print("Sleep moving average start, end index", lastStartIdx, lastEndIdx)
   
-  lowSleepRanges = list()
-  lowSleepStart = 0
   #print("len(sleepTimes):", len(sleepTimes))
   #print("len(mvAvgCurveTimes):", len(mvAvgCurveTimes))
   for i in range(0, len(mvAvgCurveTimes)):
@@ -144,19 +125,12 @@ def calculateSleepData(sleepTimes, startTime, currTime, endTime, projectionTime,
     if i >= sleepDurationTicks:
       if lastStartIdx / 2.0 == int(lastStartIdx / 2) and sleepTimes[lastStartIdx + 1][1] != wakePoor:
         sleepDur -= timeStep
-    sleepDurMovAvgTime = 24 * sleepDur / sleepAvgDuration
-    sleepDurations.append(sleepDurMovAvgTime)
-    if sleepDurMovAvgTime <= lowSleepLimit and lowSleepStart == 0:
-      lowSleepStart = mvAvgCurveTimes[i]
-    if sleepDurMovAvgTime > lowSleepLimit and lowSleepStart != 0:
-      lowSleepRanges.append([lowSleepStart.replace(microsecond=0), mvAvgCurveTimes[i].replace(microsecond=0)])
-#      lowSleepRanges.append([lowSleepStart, mvAvgCurveTimes[i]])
-      lowSleepStart = 0
+    sleepDurations.append(24 * sleepDur / sleepAvgDuration)
   
   #for i in range(0, len(mvAvgCurveTimes), 100):
   #  print("t, v", mvAvgCurveTimes[i], sleepDurations[i])
   
-  return mvAvgCurveTimes, sleepDurations, lowSleepRanges
+  return mvAvgCurveTimes, sleepDurations, sleepDurationTicks
 #### End ####
 
 
@@ -164,32 +138,28 @@ def calculateSleepData(sleepTimes, startTime, currTime, endTime, projectionTime,
 def plotSleepWakeBars(plt, sleepTimes, startTime, endTime, maxLim):
   print("Plotting sleep/wake intervals", datetime.now())
 
-  if writeNotableDates:
-    notableDatesPath = plotDir + "/" + notableDatesPathname
-    if not os.path.isdir(notableDatesPath):
-      os.makedirs(notableDatesPath)
-    notableDatesFilename = "{} {}.csv".format(notableDatesHeader, datetime.now().strftime("%Y-%m-%d"))
-  #  notableDatesFilename = "Notable Dates {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    notableDates = open(notableDatesPath + "/" + notableDatesFilename, "a+")
-    notableDatesWriter = csv.writer(notableDates, lineterminator="\n")
+  notableDatesPath = plotDir + "/" + "notableDates"
+  if not os.path.isdir(notableDatesPath):
+    os.makedirs(notableDatesPath)
+  notableDatesFilename = "Notable Dates {}.csv".format(datetime.now().strftime("%Y-%m-%d"))
+#  notableDatesFilename = "Notable Dates {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+  notableDates = open(notableDatesPath + "/" + notableDatesFilename, "a+")
+  notableDatesWriter = csv.writer(notableDates)
 
   plt.ylim([0, maxLim])
 
   startIndex = -1
   endIndex = len(sleepTimes)
   for i in range(0, len(sleepTimes), 2):
-    if sleepTimes[i][0] >= startTime:
+    if sleepTimes[i][0] > startTime:
       startIndex = i
       break
   if startIndex == -1:
     print("plotSleepWakeBars: no data after: ", startTime)
     return
   # Should start on an even numbered row (starting at 0)
-  if int(startIndex / 2) != startIndex / 2:
-    startIndex -= 1
-  # If the previous sleep/wake interval straddles the start time, back up to that interval
-  if startIndex >= 2 and sleepTimes[startIndex - 2][0] <= startTime and sleepTimes[startIndex - 1][0] >= startTime:
-    startIndex -= 2
+  if startIndex > 2 and int(startIndex / 2) != startIndex / 2:
+    startIndex -= 1 
 
   for i in range(startIndex, len(sleepTimes), 2):
     if sleepTimes[i][0] > endTime:
@@ -201,20 +171,12 @@ def plotSleepWakeBars(plt, sleepTimes, startTime, endTime, maxLim):
 
   print("Sleep startIndex, endIndex", startIndex, endIndex)
   
-  sleepTimeStartIdx = startIndex
-  sleepTimeEndIdx = startIndex + 1
-  wakeTimeStartIdx = startIndex + 1
-  wakeTimeEndIdx = startIndex + 2
-
-#   sleepTimeStart = sleepTimes[startIndex][0]
-#   sleepTimeEnd = sleepTimes[startIndex + 1][0]
-#   wakeTimeStart = sleepTimes[startIndex + 1][0]
-#   wakeTimeEnd = sleepTimes[startIndex + 2][0]
-
-  ax = plt.gca()
-  
+  sleepTimeStart = sleepTimes[startIndex][0]
+  sleepTimeEnd = sleepTimes[startIndex + 1][0]
+  wakeTimeStart = sleepTimes[startIndex + 1][0]
+  wakeTimeEnd = sleepTimes[startIndex + 2][0]
   containsPoorInterval = False
-
+  
   for i in range(startIndex, endIndex, 2):
     color = ()
     if len(sleepTimes) <= i + 1:
@@ -235,43 +197,21 @@ def plotSleepWakeBars(plt, sleepTimes, startTime, endTime, maxLim):
     ##  plt.xticks(list(plt.xticks()[0]) + [sleepTimes[i].value, sleepTimes[i + 1].value])
     ##  plt.text(sleepTimes[i], 0, sleepTimes[i], fontsize="small", horizontalalignment="center", verticalalignment="top")
     #  plt.text(sleepTimes[i][0], 0, sleepTimes[i][0].strftime("%m-%d %H:%M"),
-      if sleepTimes[i][0] > startTime:
-        plt.text(sleepTimes[i][0], 0, sleepTimes[i][0].strftime("%H:%M"),
-                 fontdict={"size": "small"}, horizontalalignment="center", verticalalignment="center", rotation=60)
-        if sleepTimes[i][3] == None:
-          logStr = ""
-        else:
-          logStr = sleepTimes[i][3]
-        plt.text(0.005, 0.96 - 0.015 * (i - startIndex),
-                 "{:%m-%d %H:%M}  {}".format(sleepTimes[i][0], sleepTimes[i][1]),
-                  fontdict={"size": "small", "fontweight": "bold"}, transform=ax.transAxes)
-        plt.text(0.095, 0.96 - 0.015 * (i - startIndex),
-                 "{}".format(logStr),
-                  fontdict={"size": "small", "fontweight": "bold"}, transform=ax.transAxes)
+      plt.text(sleepTimes[i][0], 0, sleepTimes[i][0].strftime("%H:%M"),
+               fontdict={"size": "small"}, horizontalalignment="center", verticalalignment="center", rotation=60)
 
-      if i < len(sleepTimes) - 1 and sleepTimes[i + 1][0] <= endTime:
+      if i < len(sleepTimes) - 1:
         plt.text(sleepTimes[i + 1][0], maxLim, sleepTimes[i + 1][0].strftime("%H:%M"),
                  fontsize="small", horizontalalignment="center", verticalalignment="center", rotation=60)
-        if sleepTimes[i + 1][3] == None:
-          logStr = ""
-        else:
-          logStr = sleepTimes[i + 1][3]
-        plt.text(0.005, 0.945 - 0.015 * (i - startIndex),
-                 "{:%m-%d %H:%M}  {}".format(sleepTimes[i + 1][0], sleepTimes[i + 1][1]),
-                  fontdict={"size": "small", "fontweight": "bold"}, transform=ax.transAxes)
-        plt.text(0.095, 0.945 - 0.015 * (i - startIndex),
-                 "{}".format(logStr),
-                  fontdict={"size": "small", "fontweight": "bold"}, transform=ax.transAxes)
         
         # Only plot time interval values for medium sleep intervals
         if wakeMedium == sleepTimes[i + 1][1]:
-          sleepTimeStartIdx = i
-          sleepTimeEndIdx = i + 1
-          sleepDuration = round((sleepTimes[sleepTimeEndIdx][0] - sleepTimes[sleepTimeStartIdx][0]).total_seconds() / 3600, 1)
-          loc = sleepTimes[sleepTimeStartIdx][0] + (sleepTimes[sleepTimeEndIdx][0] - sleepTimes[sleepTimeStartIdx][0])/2
-          if loc > startTime and loc < endTime:
-            plt.text(loc, plt.ylim()[1]/8, sleepDuration,
-                     fontsize="medium", horizontalalignment="center", verticalalignment="center", fontweight="normal")
+          sleepTimeStart = sleepTimes[i][0]
+          sleepTimeEnd = sleepTimes[i + 1][0]
+          sleepDuration = round((sleepTimeEnd - sleepTimeStart).total_seconds() / 3600, 1)
+          loc = sleepTimeStart + (sleepTimeEnd - sleepTimeStart)/2
+          plt.text(loc, plt.ylim()[1]/8, sleepDuration,
+                   fontsize="medium", horizontalalignment="center", verticalalignment="center", fontweight="normal")
 
       if i < len(sleepTimes) - 3:
 
@@ -279,19 +219,18 @@ def plotSleepWakeBars(plt, sleepTimes, startTime, endTime, maxLim):
         # If we do have a poor sleep interval coming up next, then don't plot anything, and the sleep interval plot
         # block will set the proper start time, but not reseting it on the poor sleep interval 
         if wakePoor != sleepTimes[i + 3][1]:
-          wakeTimeStartIdx = sleepTimeEndIdx
-          wakeTimeEndIdx = i + 2
-          wakeDuration = round((sleepTimes[wakeTimeEndIdx][0] - sleepTimes[wakeTimeStartIdx][0]).total_seconds() / 3600, 1)
-          loc = sleepTimes[wakeTimeStartIdx][0] + (sleepTimes[wakeTimeEndIdx][0] - sleepTimes[wakeTimeStartIdx][0])/2
+          wakeTimeStart = sleepTimeEnd
+          wakeTimeEnd = sleepTimes[i + 2][0]
+          wakeDuration = round((wakeTimeEnd - wakeTimeStart).total_seconds() / 3600, 1)
+          loc = wakeTimeStart + (wakeTimeEnd - wakeTimeStart)/2
           fontWeight = "normal"
-          color = "k"
           if containsPoorInterval:
-
-            dxLeft = md.date2num(loc) - md.date2num(sleepTimes[wakeTimeStartIdx][0])
+            
+            dxLeft = md.date2num(loc) - md.date2num(wakeTimeStart)
 #            startLocationLeft = loc - md.num2timedelta(dxLeft * 0.15)
             startLocationLeft = loc
-
-            dxRight = md.date2num(sleepTimes[wakeTimeEndIdx][0]) - md.date2num(loc)
+            
+            dxRight = md.date2num(wakeTimeEnd) - md.date2num(loc)
 #            startLocationRight = loc + md.num2timedelta(dxRight * 0.15)
             startLocationRight = loc
 
@@ -300,17 +239,16 @@ def plotSleepWakeBars(plt, sleepTimes, startTime, endTime, maxLim):
             plt.arrow(startLocationRight, plt.ylim()[1]/7.25, dxRight * 0.95, 0,
                       length_includes_head=True, head_width=0.25, head_length=0.035)
 
-            if writeNotableDates and wakeDuration > 18:
-              notableDates.write("{}: {}\n".format(sleeplessIntervalDelim, wakeDuration))
-              for j in range(sleepTimeStartIdx, i + 3):
-                notableDatesWriter.writerow(sleepTimes[j])
+            notableDates.write("Sleepless Interval: {}\n".format(wakeDuration))
+            notableDatesWriter.writerow(sleepTimes[i])
+            notableDatesWriter.writerow(sleepTimes[i + 1])
 
             # for the time text, out side of this "if"            
             fontWeight = "bold"
-            color = "r"
 
           plt.text(loc, plt.ylim()[1]/8, wakeDuration,
-                   fontsize="medium", horizontalalignment="center", verticalalignment="center", fontweight=fontWeight, color=color)
+                   fontsize="medium", horizontalalignment="center", verticalalignment="center", fontweight=fontWeight)
+          
           
           containsPoorInterval = False
         else:
@@ -318,13 +256,11 @@ def plotSleepWakeBars(plt, sleepTimes, startTime, endTime, maxLim):
 
   sleepDuration = round((datetime.now() - sleepTimes[-1][0]).total_seconds() / 3600, 1)
   loc = sleepTimes[-1][0] + (datetime.now() - sleepTimes[-1][0])/2
-  if loc < endTime:
-    plt.text(loc, plt.ylim()[1]/8, sleepDuration,
-             fontsize="medium", horizontalalignment="center", verticalalignment="center", fontweight="normal")
+  plt.text(loc, plt.ylim()[1]/8, sleepDuration,
+           fontsize="medium", horizontalalignment="center", verticalalignment="center", fontweight="normal")
   print("Done Plotting sleep/wake intervals", datetime.now())
   
-  if writeNotableDates:
-    notableDates.close()
+  notableDates.close()
   
   return
 #### End ####
@@ -336,10 +272,10 @@ def plotSleepBar(plt, sleepTimes, i, color, alpha):
   end_1 = sleepTimes[i+1][0]
   end_2 = end_1
 
-  print("plotting sleep bar from: {} to {}".format(sleepTimes[i][0], sleepTimes[i+1][0]))
+#  print("plotting sleep bar from: {} to {}".format(sleepTimes[i][0], sleepTimes[i+1][0]))
 
   if end_2 - start_1 < timedelta(0, 90 * 60):
-    width = (end_2 - start_1) / 3
+    width = (end_2 - start_1) / 10
   else:
     width = timedelta(0, 30 * 60)
   if smokeKey.lower() in str(sleepTimes[i][3]).lower() or potSmokeKey.lower() in str(sleepTimes[i][3]).lower():
@@ -389,46 +325,6 @@ def plotSmokeTimes(plt, smokeTimes, startTime, endTime, color):
   return
 #### End ####
 
-#### Start ####
-def writeLowSleepRanges(lowSleepRanges):
-  if not writeNotableDates:
-    return
-
-  notableDatesPath = plotDir + "/" + notableDatesPathname
-  if not os.path.isdir(notableDatesPath):
-    os.makedirs(notableDatesPath)
-  notableDatesFilename = "{} {}.csv".format(lowSleepHeader, datetime.now().strftime("%Y-%m-%d"))
-#  notableDatesFilename = "Notable Dates {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-  notableDates = open(notableDatesPath + "/" + notableDatesFilename, "a+")
-  notableDatesWriter = csv.writer(notableDates, lineterminator="\n")
-
-  for lowSleepRange in lowSleepRanges:
-    notableDatesWriter.writerow(lowSleepRange)
-
-
-# #               notableDates.write("{}: {}\n".format(sleeplessIntervalDelim, wakeDuration))
-#               for j in range(sleepTimeStartIdx, i + 3):
-#                 notableDatesWriter.writerow(sleepTimes[j])
-
-  notableDates.close()
-
-#### End ####
-
-
-#### Start ####
-def calculateDayMarkers(startTime, currTime, endTime, maxLim):
-  dayMarkerTimes = list()
-  markerLoc = list()
-  timeTicks = int((endTime - startTime).total_seconds() / timeStep) * timeStep
-  for sec in range(0, timeTicks, timeStep):
-    time = startTime + timedelta(0, sec)
-    if time.time().hour <= 18 and time.time().hour >= 6:
-      continue
-    dayMarkerTimes.append(time)
-    markerLoc.append(maxLim * 0.98)
-
-  return dayMarkerTimes, markerLoc
-#### End ####
 
 #### Start ####
 def makeSleepPlot(startTime, currTime, endTime, sleepTimes, maxLim = 24, show_plot = True, rel_save_dir="."):
@@ -438,18 +334,10 @@ def makeSleepPlot(startTime, currTime, endTime, sleepTimes, maxLim = 24, show_pl
   projectionTime = (endTime - currTime).total_seconds()
 
   # make a time-index list for sleep moving averages
-  mvAvgCurveTimes, sleepDurations, lowSleepRanges = \
+  mvAvgCurveTimes, sleepDurations, sleepDurationTicks = \
       calculateSleepData(sleepTimes, startTime, currTime, endTime, projectionTime, timeStep, sleepAvgDuration)
   
   print("Done Calculating Sleep Moving Averages", datetime.now())
-
-  writeLowSleepRanges(lowSleepRanges)
-
-#   for lowSleepRange in lowSleepRanges:
-#     print(lowSleepRange)
-
-
-  dayMarkerTimes, markerLoc = calculateDayMarkers(startTime, currTime, endTime, maxLim)
 
   # Now
   plt.axvline(currTime, color="k")
@@ -466,50 +354,21 @@ def makeSleepPlot(startTime, currTime, endTime, sleepTimes, maxLim = 24, show_pl
 
   # set the size of the plot in the plot window
 #  plt.subplots_adjust(left=0.02, right=0.98, top=0.96, bottom=0.04)
-  plt.subplots_adjust(left=0.03, right=0.97, top=0.94, bottom=0.07)
+  plt.subplots_adjust(left=0.03, right=0.97, top=0.95, bottom=0.04)
   ## For printing
   #fig = plt.figure(num=1, figsize=((1920 - 5) / 80 / 2.3, 10))
   #plt.subplots_adjust(left=0.05, right=0.96)
 
 #  plt.ylabel("{} Day Average Sleep".format(int(sleepAvgDuration / (24 * 60 * 60))))
 
+
   # Fix up the axes
   ax = plt.gca()
 #  ax.set_ylim(0, maxLimLeft)
-
-#  axSleep.plot(mvAvgCurveTimes, sleepDurations, "k--")
   
-  # Plot the moving average curve, coloring the line by whether or not sleep is below the low limit
-  currColor = normalSleepColor if sleepDurations[0] > lowSleepLimit else lowSleepColor
-  colorChangeIdx = list()
-  colorChangeIdx.append(0)
-  lastVal = sleepDurations[0]
-
-  for i in range(0, len(mvAvgCurveTimes)):
-    if sleepDurations[i] > lowSleepLimit and lastVal > lowSleepLimit:
-      continue
-    elif sleepDurations[i] > lowSleepLimit and lastVal <= lowSleepLimit:
-      colorChangeIdx.append(i)
-    elif sleepDurations[i] <= lowSleepLimit and lastVal <= lowSleepLimit:
-      continue
-    elif sleepDurations[i] <= lowSleepLimit and lastVal > lowSleepLimit:
-      colorChangeIdx.append(i)
-    lastVal = sleepDurations[i]
-  colorChangeIdx.append(len(mvAvgCurveTimes))
-
   # Create an axis for sleep times
   axSleep = ax.twinx() # right side axis annotation
-
-  firstIdx = colorChangeIdx[0]
-  for i in colorChangeIdx[1:]:
-    axSleep.plot(mvAvgCurveTimes[firstIdx : i], sleepDurations[firstIdx : i], currColor)
-    if currColor == normalSleepColor:
-      currColor = lowSleepColor
-    else:
-      currColor = normalSleepColor
-    firstIdx = i
-  
-  axSleep.plot(dayMarkerTimes, markerLoc, ".b")
+  axSleep.plot(mvAvgCurveTimes[sleepDurationTicks:], sleepDurations[sleepDurationTicks:], "k--")
   axSleep.set_ylim(0, maxLimRight)
   sleepMajorLocator = MultipleLocator(4)
   sleepMinorLocator = MultipleLocator(2)
@@ -532,10 +391,8 @@ def makeSleepPlot(startTime, currTime, endTime, sleepTimes, maxLim = 24, show_pl
   timePeriodDays = int((currTime - startTime).total_seconds() / (60 * 60 * 24))
 
   plt.suptitle("170 Lake St. Nicotine/Cigarette Fixes and Sleep", fontsize=16, y=1.0)
-#  plt.title(r"For the $\bf%s$ day period: $\bf%s$ to $\bf%s$" % (timePeriodDays,
-#             startTime.strftime("%Y-%m-%d"), endTime.strftime("%Y-%m-%d")), y=1.0)
   plt.title(r"For the $\bf%s$ day period: $\bf%s$ to $\bf%s$" % (timePeriodDays,
-             startTime.strftime("%Y-%m-%d"), endTime.strftime("%Y-%m-%d")), y=1.015)
+             startTime.strftime("%Y-%m-%d"), endTime.strftime("%Y-%m-%d")), y=1.0)
 
 #  plt.xlabel("Date and Sleep/Wake Times")
   ax.set_xlabel("Fix Date/Time and Sleep/Wake Intervals")
@@ -555,7 +412,7 @@ def makeSleepPlot(startTime, currTime, endTime, sleepTimes, maxLim = 24, show_pl
     if not os.path.isdir(plotPath):
       os.makedirs(plotPath)
     # must happen before plt.show()
-    plt.savefig("%s/SleepAndSmoke %s to %s.png" % (plotPath, startTime.strftime("%Y-%m-%d"), endTime.strftime("%Y-%m-%d")), dpi=300)
+    plt.savefig("%s/SleepAndSmoke %s to %s.png" % (plotPath, startTime.strftime("%Y-%m-%d"), endTime.strftime("%Y-%m-%d")))
 
 # to make jpgs:
 # import Image

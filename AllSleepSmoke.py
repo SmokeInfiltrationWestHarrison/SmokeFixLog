@@ -122,9 +122,9 @@ print("Done Extracting", datetime.now())
 
 #plotWeeklyCharts(smokeTimes, potSmokeTimes, sleepTimes)
 
-#plotAllData(smokeTimes, potSmokeTimes, sleepTimes)
+plotAllData(smokeTimes, potSmokeTimes, sleepTimes)
 
-plotNotableDates(smokeTimes, potSmokeTimes, sleepTimes)
+#plotNotableDates(smokeTimes, potSmokeTimes, sleepTimes)
 
 #plotCustomRanges(smokeTimes, potSmokeTimes, sleepTimes)
 
